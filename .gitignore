@@ -1,0 +1,27 @@
+# macOS specific
+.DS_Store
+
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Output of the go coverage tool, etc.
+*.out
+
+# Dependency directories
+/vendor/
+
+# IDE and editor files
+.idea/
+*.swp
+*.swo
+.vscode/
+
+# Environment files
+.env
+
+# Build output directory
+dist/

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>URL Shortener</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-3">URL Shortener Service</h1>
+        <form id="urlForm" class="mb-3">
+            <div class="input-group mb-3">
+                <input type="url" id="originalUrl" class="form-control" placeholder="Enter URL to shorten" aria-label="Enter URL to shorten" aria-describedby="button-addon2" required>
+                <div class="input-group-append">
+                    <button class="btn btn-outline-secondary" type="submit" id="button-addon2">Shorten</button>
+                </div>
+            </div>
+        </form>
+        <div id="alertContainer"></div>
+        <!-- Result card (hidden by default) -->
+        <div id="resultCard" class="card d-none mt-4">
+            <div class="card-body">
+                <h5 class="card-title">Short URL Details</h5>
+                <p class="card-text"><strong>Original URL:</strong> <span id="originalUrlDisplay"></span></p>
+                <p class="card-text"><strong>Short URL:</strong> <a href="" id="shortUrl" target="_blank"></a></p>
+                <p class="card-text"><strong>Visit Count:</strong> <span id="visitCount">0</span></p>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Declare a variable to store the interval ID
+        var updateIntervalId;
+
+        // Clear the interval when a new URL is shortened
+        function resetUpdateInterval() {
+            if (updateIntervalId) {
+                clearInterval(updateIntervalId);
+            }
+        }
+
+        document.getElementById('urlForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            resetUpdateInterval(); // Reset any existing update intervals
+            var originalUrl = document.getElementById('originalUrl').value;
+            if (!originalUrl) {
+                showAlert('Please enter a URL to shorten.', 'danger');
+                return;
+            }
+            if (!isValidUrl(originalUrl)) {
+                showAlert('Please enter a valid URL.', 'danger');
+                return;
+            }
+            // Disable the button and show loading text
+            var button = document.querySelector('button[type="submit"]');
+            button.disabled = true;
+            button.textContent = 'Shortening...';
+
+            fetch('http://localhost:8080/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ originalUrl: originalUrl })
+            })
+            .then(response => {
+                button.disabled = false;
+                button.textContent = 'Shorten';
+                if (response.status === 429) {
+                    throw new Error('Rate limit exceeded. Please try again later.');
+                }
+                if (!response.ok) {
+                    throw new Error('Network response was not ok ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.shortCode) {
+                    var message = data.isNew ? 'URL shortened successfully!' : 'Existing short URL retrieved!';
+                    showAlert(message, 'success');
+                    var resultCard = document.getElementById('resultCard');
+                    var originalUrlDisplay = document.getElementById('originalUrlDisplay');
+                    var shortUrlAnchor = document.getElementById('shortUrl');
+                    var visitCountSpan = document.getElementById('visitCount');
+
+                    // Set the original URL
+                    originalUrlDisplay.textContent = originalUrl;
+
+                    // Set the shortened URL
+                    var shortUrl = 'http://localhost:8080/' + data.shortCode;
+                    shortUrlAnchor.href = shortUrl;
+                    shortUrlAnchor.textContent = shortUrl;
+
+                    if (data.isNew) {
+                        visitCountSpan.textContent = '0';
+                    } else {
+                        getAndDisplayAnalytics(data.shortCode);
+                    }
+
+                    // Show the card
+                    resultCard.classList.remove('d-none');
+
+                    // Start updating the visit count periodically
+                    updateVisitCountPeriodically(data.shortCode);
+                } else {
+                    showAlert('Error creating short URL.', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('Error: ' + error.message, 'danger');
+            });
+        });
+
+        // Show alert
+        function showAlert(message, type) {
+            var alertContainer = document.getElementById('alertContainer');
+            alertContainer.innerHTML = '<div class="alert alert-' + type + '">' + message + '</div>';
+        }
+        // Validate URL
+        function isValidUrl(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+        // Get analytics
+        function getAndDisplayAnalytics(shortCode) {
+            fetch('http://localhost:8080/analytics/' + shortCode)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.visitCount !== undefined) {
+                        document.getElementById('visitCount').textContent = data.visitCount;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
+        
+        function updateVisitCountPeriodically(shortCode) {
+            // Clear any existing interval to prevent multiple intervals
+            if (updateIntervalId) {
+                clearInterval(updateIntervalId);
+            }
+            updateIntervalId = setInterval(() => {
+                getAndDisplayAnalytics(shortCode);
+            }, 1500); // Update every 1.5 second
+        }
+    </script>
+</body>
+</html>
