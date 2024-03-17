@@ -14,6 +14,7 @@ services:
 
   ory-hydra:
     image: oryd/hydra:v1.10.6
+    platform: linux/amd64
     command: serve all --dangerous-force-http
     environment:
       SECRETS_SYSTEM: eb30e7ed967d775a42c65a915f255321
@@ -61,8 +62,7 @@ services:
 
 networks:
   hydra-network:
-    name: hydra-network
-    driver: bridge
+    external: true
 
 volumes:
   postgres_data: 

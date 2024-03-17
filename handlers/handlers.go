@@ -2,20 +2,31 @@
 package handlers
 
 import (
+	"fmt"
+    "net/url"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
-
 	"url-shortener/models"
 	"url-shortener/storage"
 	"url-shortener/utils"
-
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
+	"io/ioutil"
+    "strings"
+	//"github.com/ory/hydra-client-go/client"
 )
 
 var redisClient *storage.RedisClient
+
+
+/*var hydraAdminURL = "https://exciting-tesla-xohu7lej80.projects.oryapis.com"
+var hydraClient = client.NewHTTPClientWithConfig(nil, &client.TransportConfig{
+	Schemes:  []string{"http"},
+	Host:     hydraAdminURL,
+	BasePath: "/",
+})*/
 
 func init() {
 	// Initialize the Redis client
@@ -189,20 +200,82 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// need to create an OAuth 2.0 authorization request with ORY Hydra
-	// redirecting the user to the Hydra login consent flow,
-	// set a cookie or session to remember the user's login state
-	// and then redirect them to the Hydra authorization URL.
+	// Initiate the Ory Cloud OAuth2 authorization flow
+	authURL := "https://exciting-tesla-xohu7lej80.projects.oryapis.com/oauth2/auth"
+	clientID := "c674a060-44f9-404f-9488-46cd12c6b6fb"
+	redirectURI := "http://localhost:8080/callback"
+	scope := "openid offline_access"
+
+	authQuery := url.Values{}
+	authQuery.Set("client_id", clientID)
+	authQuery.Set("redirect_uri", redirectURI)
+	authQuery.Set("scope", scope)
+	authQuery.Set("response_type", "code")
+
+	authURLWithQuery := fmt.Sprintf("%s?%s", authURL, authQuery.Encode())
+
+	// Redirect the user to the Ory Cloud authorization endpoint
+	http.Redirect(w, r, authURLWithQuery, http.StatusTemporaryRedirect)
 
 	// For now just return success message
 	w.Write([]byte("Login successful"))
 }
 
-func ConsentHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Render consent page or handle consent logic
-}
 
 func CallbackHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Handle the callback from Hydra
-	// This is where you would handle the authorization code or tokens from Hydra
+    // Get the authorization code from the query parameters
+    code := r.URL.Query().Get("code")
+    if code == "" {
+        http.Error(w, "Authorization code is missing", http.StatusBadRequest)
+        return
+    }
+
+    // Exchange the authorization code for an access token and refresh token
+    tokenURL := "https://exciting-tesla-xohu7lej80.projects.oryapis.com/oauth2/token"
+    clientID := "c674a060-44f9-404f-9488-46cd12c6b6fb"
+    //clientSecret := "" // Not required since the client authentication method is set to "none"
+    redirectURI := "http://localhost:8080/callback"
+
+    tokenRequest, err := http.NewRequest("POST", tokenURL, nil)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    tokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+    tokenQuery := url.Values{}
+    tokenQuery.Set("grant_type", "authorization_code")
+    tokenQuery.Set("code", code)
+    tokenQuery.Set("client_id", clientID)
+    tokenQuery.Set("redirect_uri", redirectURI)
+
+    tokenRequest.Body = ioutil.NopCloser(strings.NewReader(tokenQuery.Encode()))
+
+    client := &http.Client{}
+    tokenResponse, err := client.Do(tokenRequest)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    defer tokenResponse.Body.Close()
+
+    var tokenData struct {
+        AccessToken  string `json:"access_token"`
+        RefreshToken string `json:"refresh_token"`
+        // Other token data fields
+    }
+
+    err = json.NewDecoder(tokenResponse.Body).Decode(&tokenData)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Store the access token and refresh token in the session or cookie
+    // You can also perform additional logic, such as redirecting the user to a protected page
+
+    fmt.Fprintf(w, "Access Token: %s\nRefresh Token: %s", tokenData.AccessToken, tokenData.RefreshToken)
+
+	http.Redirect(w, r, "/", http.StatusFound)
 }

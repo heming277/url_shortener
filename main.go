@@ -6,9 +6,7 @@ import (
 	"net/http"
 	"os"
 	"url-shortener/api"
-	"url-shortener/handlers"
 	"url-shortener/storage"
-
 	"github.com/rs/cors"
 )
 
@@ -35,10 +33,13 @@ func main() {
 		Debug:            true,
 	})
 
+	// Serve static files
+	fs := http.FileServer(http.Dir("./frontend"))
+	// Serve the static files under the root path, but not interfere with API paths
+	router.PathPrefix("/").Handler(http.StripPrefix("/", fs))
+
 	// Apply the CORS middleware to the router
 	handler := corsHandler.Handler(router)
-	http.HandleFunc("/login", handlers.LoginHandler)
-	http.HandleFunc("/consent", handlers.ConsentHandler)
 
 	log.Println("Starting server on :8080")
 	if err := http.ListenAndServe(":8080", handler); err != nil {
