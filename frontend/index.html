@@ -4,30 +4,221 @@
     <meta charset="UTF-8">
     <title>URL Shortener</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        .btn-primary:hover {
+            background-color: #0069d9;
+            border-color: #0062cc;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+            border-color: #bd2130;
+        }
+        .card {
+            border: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="mb-3">URL Shortener Service</h1>
-        <form id="urlForm" class="mb-3">
-            <div class="input-group mb-3">
-                <input type="url" id="originalUrl" class="form-control" placeholder="Enter URL to shorten" aria-label="Enter URL to shorten" aria-describedby="button-addon2" required>
-                <div class="input-group-append">
-                    <button class="btn btn-outline-secondary" type="submit" id="button-addon2">Shorten</button>
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <h1 class="mb-4 text-center">URL Shortener Service</h1>
+
+                <div class="d-flex justify-content-center mb-4">
+                    <button class="btn btn-primary btn-lg mr-2" data-toggle="modal" data-target="#signupModal" id="signupBtn">Sign Up</button>
+                    <button class="btn btn-primary btn-lg mr-2" data-toggle="modal" data-target="#loginModal" id="loginBtn">Login</button>
+                    <button class="btn btn-danger btn-lg" id="logoutBtn" style="display: none;">Sign Out</button>
                 </div>
-            </div>
-        </form>
-        <div id="alertContainer"></div>
-        <!-- Result card (hidden by default) -->
-        <div id="resultCard" class="card d-none mt-4">
-            <div class="card-body">
-                <h5 class="card-title">Short URL Details</h5>
-                <p class="card-text"><strong>Original URL:</strong> <span id="originalUrlDisplay"></span></p>
-                <p class="card-text"><strong>Short URL:</strong> <a href="" id="shortUrl" target="_blank"></a></p>
-                <p class="card-text"><strong>Visit Count:</strong> <span id="visitCount">0</span></p>
+
+                <form id="urlForm" class="mb-4">
+                    <div class="input-group mb-3">
+                        <input type="url" id="originalUrl" class="form-control form-control-lg" placeholder="Enter URL to shorten" aria-label="Enter URL to shorten" aria-describedby="button-addon2" required>
+                        <div class="input-group-append">
+                            <button class="btn btn-primary btn-lg" type="submit" id="button-addon2">Shorten</button>
+                        </div>
+                    </div>
+                </form>
+
+                <div id="alertContainer"></div>
+
+                <div id="resultCard" class="card d-none mt-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Short URL Details</h5>
+                        <p class="card-text"><strong>Original URL:</strong> <span id="originalUrlDisplay"></span></p>
+                        <p class="card-text"><strong>Short URL:</strong> <a href="" id="shortUrl" target="_blank"></a></p>
+                        <p class="card-text"><strong>Visit Count:</strong> <span id="visitCount">0</span></p>
+                    </div>
+                </div>
+
+                <div class="row justify-content-center mt-4" id="urlTableContainer" style="display: none;">
+                    <div class="col-md-8">
+                        <h2 class="mb-4">Your Shortened URLs</h2>
+                        <table class="table table-striped" id="urlTable">
+                            <thead>
+                                <tr>
+                                    <th>Original URL</th>
+                                    <th>Shortened URL</th>
+                                    <th>Visit Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="urlTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Signup Modal -->
+    <div class="modal fade" id="signupModal" tabindex="-1" role="dialog" aria-labelledby="signupModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="signupModalLabel">Sign Up</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="signupForm">
+                        <div class="form-group">
+                            <label for="signupEmail">Email</label>
+                            <input type="email" class="form-control" id="signupEmail" placeholder="Enter your email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signupPassword">Password</label>
+                            <input type="password" class="form-control" id="signupPassword" placeholder="Enter your password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Sign Up</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal" tabindex="-1" role="dialog" aria-labelledby="loginModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loginModalLabel">Login</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label for="loginEmail">Email</label>
+                            <input type="email" class="form-control" id="loginEmail" placeholder="Enter your email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Password</label>
+                            <input type="password" class="form-control" id="loginPassword" placeholder="Enter your password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Login</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script>
+
+        document.getElementById('logoutBtn').addEventListener('click', function(event) {
+                localStorage.removeItem('userToken');
+                window.location.reload(); // Or any other logic to revert UI to logged-out state
+            });
+
+        function handleAuthenticationSuccess(token) {
+            localStorage.setItem('userToken', token);
+            // Hide signup/login buttons and show logout button
+            document.getElementById('signupBtn').style.display = 'none';
+            document.getElementById('loginBtn').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'block';
+            document.getElementById('signupModal').style.display = 'none';
+            document.getElementById('loginModal').style.display = 'none';
+
+            // Remove the modal backdrop overlay
+            const modalBackdrop = document.querySelector('.modal-backdrop');
+            if (modalBackdrop) {
+                modalBackdrop.remove();
+            }
+
+            // Hide the guest-specific UI elements
+            document.getElementById('resultCard').classList.add('d-none');
+
+            // Show the user-specific UI elements
+            document.getElementById('urlTable').classList.remove('d-none');
+
+            // Fetch and display the user's shortened URLs
+            fetchUserShortenedUrls();
+        }
+
+        function fetchUserShortenedUrls() {
+            const token = localStorage.getItem('userToken');
+            if (!token) {
+                console.error('No token found');
+                return;
+            }
+
+            // Hide the guest-specific UI elements
+            document.getElementById('resultCard').classList.add('d-none');
+
+            // Show the user-specific UI elements
+            document.getElementById('urlTableContainer').style.display = 'block';
+
+            // Adjust the endpoint as necessary
+            fetch('http://localhost:8080/user/urls', {
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                const urlTableBody = document.getElementById('urlTableBody');
+                urlTableBody.innerHTML = ''; // Clear the table body before populating it
+
+                if (data && data.urls) {
+                    data.urls.forEach(url => {
+                        const row = document.createElement('tr');
+                        const originalUrlCell = document.createElement('td');
+                        const shortCodeCell = document.createElement('td');
+                        const visitCountCell = document.createElement('td');
+
+                        originalUrlCell.textContent = url.originalUrl;
+                        shortCodeCell.textContent = url.shortCode;
+                        visitCountCell.textContent = url.visitCount;
+
+                        row.appendChild(originalUrlCell);
+                        row.appendChild(shortCodeCell);
+                        row.appendChild(visitCountCell);
+                        urlTableBody.appendChild(row);
+                    });
+                } else {
+                    console.log('No URLs found for the user.');
+                    // Optionally, you can display a message or take any other action for this case
+                }
+            })
+            .catch(error => console.error('Error fetching URLs:', error));
+        }
+
         // Declare a variable to store the interval ID
         var updateIntervalId;
 
@@ -37,6 +228,74 @@
                 clearInterval(updateIntervalId);
             }
         }
+
+        document.getElementById('signupForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent the default form submission
+
+            // Collect form data
+            var email = document.getElementById('signupEmail').value;
+            var password = document.getElementById('signupPassword').value;
+
+            // Send the data to your backend
+            fetch('http://localhost:8080/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email: email, password: password }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.token) {
+                    // Here you handle the login. For example, you could store the token:
+                    localStorage.setItem('userToken', data.token);
+                    handleAuthenticationSuccess(data.token);
+                    // Redirect the user or update the UI as logged in
+       
+                } else {
+                    // Handle errors, such as displaying a message to the user
+                    alert('Signup failed: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error during signup:', error);
+            });
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent the default form submission
+
+            // Collect form data
+            var email = document.getElementById('loginEmail').value;
+            var password = document.getElementById('loginPassword').value;
+
+            // Send the data to your backend
+            fetch('http://localhost:8080/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email: email, password: password }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data)
+                if (data.token) {
+                    console.log(data.token)
+                    // Handle the login. For example, store the token:
+                    localStorage.setItem('userToken', data.token);
+                    // Redirect the user or update the UI as logged in
+                    handleAuthenticationSuccess(data.token);
+                    
+                } else {
+                    // Handle errors, such as displaying a message to the user
+                    alert('Login failed: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error during login:', error);
+            });
+        });
 
         document.getElementById('urlForm').addEventListener('submit', function(event) {
             event.preventDefault();

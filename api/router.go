@@ -19,7 +19,9 @@ func NewRouter() *mux.Router {
 
 	router.HandleFunc("/signup", handlers.SignUpHandler).Methods("POST")
 	router.HandleFunc("/login", handlers.LoginHandler).Methods("POST")
-	router.HandleFunc("/callback", handlers.CallbackHandler).Methods("GET")
 
+	router.HandleFunc("/user/urls", handlers.GetUserURLsHandler).Methods("GET")
+	router.HandleFunc("/delete/{shortCode}", handlers.DeleteURLHandler).Methods("DELETE")
+	
 	return router
 }

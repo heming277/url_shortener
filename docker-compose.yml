@@ -10,34 +10,14 @@ services:
       - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - hydra-network
-
-  ory-hydra:
-    image: oryd/hydra:v1.10.6
-    platform: linux/amd64
-    command: serve all --dangerous-force-http
-    environment:
-      SECRETS_SYSTEM: eb30e7ed967d775a42c65a915f255321
-      DSN: postgres://postgres:mysecretpassword@urlpostgres:5432/postgres?sslmode=disable
-      URLS_SELF_ISSUER: http://localhost:4444/
-      URLS_CONSENT: http://localhost:3000/consent
-      URLS_LOGIN: http://localhost:3000/login
-      URLS_LOGOUT: http://localhost:3000/logout
-      OAUTH2_EXPOSE_INTERNAL_ERRORS: "true"
-    ports:
-      - "4444:4444"
-      - "4445:4445"
-    depends_on:
-      - urlpostgres
-    networks:
-      - hydra-network
+      - app-network
 
   redis:
     image: redis:alpine
     volumes:
       - redis_data:/data
     networks:
-      - hydra-network
+      - app-network
 
   app:
     build: .
@@ -57,13 +37,11 @@ services:
       - urlpostgres
       - redis
     networks:
-      - hydra-network
-
+      - app-network
 
 networks:
-  hydra-network:
-    external: true
+  app-network:
 
 volumes:
-  postgres_data: 
-  redis_data:   
+  postgres_data:
+  redis_data:

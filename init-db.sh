@@ -12,11 +12,14 @@ do
   sleep 2
 done
 
+# Set the default value of DB_NAME to 'postgres' if not already set
+DB_NAME=${DB_NAME:-postgres}
+
 # Run the migration scripts
 for file in /migrations/*.sql
 do
   echo "Running $file..."
-  psql -h localhost -U $PGUSER -d $DB_NAME -a -f "$file"
+  psql -h localhost -U $PGUSER -d "$DB_NAME" -a -f "$file"
 done
 
 echo "Database initialized!"

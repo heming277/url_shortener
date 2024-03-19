@@ -2,104 +2,154 @@
 package handlers
 
 import (
-	"fmt"
-    "net/url"
+
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
+	"strings"
 	"url-shortener/models"
 	"url-shortener/storage"
 	"url-shortener/utils"
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
-	"io/ioutil"
-    "strings"
-	//"github.com/ory/hydra-client-go/client"
+	"github.com/dgrijalva/jwt-go"
+	"log"
+
 )
 
 var redisClient *storage.RedisClient
+var jwtKey = []byte("+iQmsWxcpcHN+YPHUojt9iVgBtsrhPm59cR9q1+F4Lk=")
 
-
-/*var hydraAdminURL = "https://exciting-tesla-xohu7lej80.projects.oryapis.com"
-var hydraClient = client.NewHTTPClientWithConfig(nil, &client.TransportConfig{
-	Schemes:  []string{"http"},
-	Host:     hydraAdminURL,
-	BasePath: "/",
-})*/
+type Claims struct {
+	Email string `json:"email"`
+	jwt.StandardClaims
+}
 
 func init() {
 	// Initialize the Redis client
 	redisClient = storage.NewRedisClient()
 }
 
+func GetUserURLsHandler(w http.ResponseWriter, r *http.Request) {
+    email, err := getEmailFromToken(r)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusUnauthorized)
+        return
+    }
+
+    user, err := storage.GetUserByEmail(email)
+    if err != nil {
+        log.Printf("Error retrieving user by email: %v", err)
+        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        return
+    }
+
+    urlMappings, err := storage.GetUserURLMappings(user.ID)
+    if err != nil {
+        log.Printf("Error retrieving URL mappings: %v", err)
+        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(urlMappings)
+}
+
+
+func getEmailFromToken(r *http.Request) (string, error) {
+    tokenString := r.Header.Get("Authorization")
+    if tokenString == "" {
+        return "", errors.New("authorization header is missing")
+    }
+    tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+
+    claims := &Claims{}
+
+    token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+        return jwtKey, nil
+    })
+
+    if err != nil || !token.Valid {
+        return "", errors.New("invalid token")
+    }
+
+    return claims.Email, nil
+}
+
 // CreateShortURLHandler handles requests for creating short URLs.
 func CreateShortURLHandler(w http.ResponseWriter, r *http.Request) {
-	var urlMapping models.URLMapping
-	// Decode the incoming JSON payload
-	if err := json.NewDecoder(r.Body).Decode(&urlMapping); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	// Sanitize the original URL
-	sanitizedURL, err := utils.SanitizeURL(urlMapping.OriginalURL)
-	if err != nil {
-		http.Error(w, "Invalid URL", http.StatusBadRequest)
-		return
-	}
-	urlMapping.OriginalURL = sanitizedURL
+    var urlMapping models.URLMapping
+    if err := json.NewDecoder(r.Body).Decode(&urlMapping); err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
 
-	var userID string
-	isNew := false
+    sanitizedURL, err := utils.SanitizeURL(urlMapping.OriginalURL)
+    if err != nil {
+        http.Error(w, "Invalid URL", http.StatusBadRequest)
+        return
+    }
+    urlMapping.OriginalURL = sanitizedURL
 
-	if userID != "" {
-		existingMapping, err := storage.GetURLMappingByOriginalURL(userID, urlMapping.OriginalURL)
-		if err == nil {
-			// URL already exists for this user, return the existing short code
-			urlMapping.ShortCode = existingMapping.ShortCode
-		} else {
-			// URL does not exist, create a new short code and store it in PostgreSQL
-			urlMapping.ShortCode = utils.GenerateRandomString(8)
-			urlMapping.UserID = userID
-			if err := storage.SaveURLMapping(urlMapping); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-	} else {
-		// For guests, check if the URL already exists in Redis
-		existingShortCode, err := redisClient.GetShortCodeByURL(urlMapping.OriginalURL)
-		if err != nil && !errors.Is(err, storage.ErrURLNotFound) {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+    email, err := getEmailFromToken(r)
+    isNew := false
 
-		if existingShortCode == "" {
-			// Generate a short code for the URL
-			urlMapping.ShortCode = utils.GenerateRandomString(8)
-			// Store the URL mapping in Redis with a 24-hour expiration
-			if err := redisClient.StoreURLMapping(urlMapping.ShortCode, urlMapping.OriginalURL, 24*time.Hour); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			isNew = true
-		} else {
-			// Use the existing short code
-			urlMapping.ShortCode = existingShortCode
-		}
-	}
-	// Respond with the short URL and the isNew flag
-	w.Header().Set("Content-Type", "application/json")
-	response := struct {
-		OriginalURL string `json:"originalUrl"`
-		ShortCode   string `json:"shortCode"`
-		IsNew       bool   `json:"isNew"`
-	}{
-		OriginalURL: urlMapping.OriginalURL,
-		ShortCode:   urlMapping.ShortCode,
-		IsNew:       isNew,
-	}
-	json.NewEncoder(w).Encode(response)
+    if err == nil && email != "" {
+        user, err := storage.GetUserByEmail(email)
+        if err != nil {
+            http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+            return
+        }
+
+        existingMapping, err := storage.GetURLMappingByOriginalURL(user.ID, urlMapping.OriginalURL)
+        if err == nil {
+            urlMapping.ShortCode = existingMapping.ShortCode
+        } else {
+            urlMapping.ShortCode = utils.GenerateRandomString(8)
+            urlMapping.UserID = user.ID
+            if err := storage.SaveURLMapping(urlMapping); err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            isNew = true
+        }
+    } else {
+        // For guests, check if the URL already exists in Redis
+        existingShortCode, err := redisClient.GetShortCodeByURL(urlMapping.OriginalURL)
+        if err != nil && !errors.Is(err, storage.ErrURLNotFound) {
+            http.Error(w, err.Error(), http.StatusInternalServerError)
+            return
+        }
+
+        if existingShortCode == "" {
+            // Generate a short code for the URL
+            urlMapping.ShortCode = utils.GenerateRandomString(8)
+            // Store the URL mapping in Redis with a 24-hour expiration
+            if err := redisClient.StoreURLMapping(urlMapping.ShortCode, urlMapping.OriginalURL, 24*time.Hour); err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            isNew = true
+        } else {
+            // Use the existing short code
+            urlMapping.ShortCode = existingShortCode
+        }
+    }
+    // Respond with the short URL and the isNew flag
+    w.Header().Set("Content-Type", "application/json")
+    response := struct {
+        OriginalURL string `json:"originalUrl"`
+        ShortCode   string `json:"shortCode"`
+        IsNew       bool   `json:"isNew"`
+        VisitCount  int    `json:"visitCount"`
+    }{
+        OriginalURL: urlMapping.OriginalURL,
+        ShortCode:   urlMapping.ShortCode,
+        IsNew:       isNew,
+        VisitCount:  0, // Initialize the visit count to 0 for new URLs
+    }
+    json.NewEncoder(w).Encode(response)
 }
 
 // RedirectShortURLHandler handles requests for redirecting to the original URL.
@@ -148,6 +198,31 @@ func GetURLAnalyticsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]int{"visitCount": count})
 }
 
+func DeleteURLHandler(w http.ResponseWriter, r *http.Request) {
+    shortCode := mux.Vars(r)["shortCode"]
+    email, err := getEmailFromToken(r)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusUnauthorized)
+        return
+    }
+
+    user, err := storage.GetUserByEmail(email)
+    if err != nil {
+        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        return
+    }
+
+    err = storage.DeleteURLMapping(user.ID, shortCode)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+}
+
+
+
 func SignUpHandler(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 	err := json.NewDecoder(r.Body).Decode(&user)
@@ -156,7 +231,6 @@ func SignUpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Hash the password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
@@ -164,16 +238,32 @@ func SignUpHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	user.Password = string(hashedPassword)
 
-	// Save the user to the database
 	err = storage.SaveUser(user)
 	if err != nil {
 		http.Error(w, "Failed to save user", http.StatusInternalServerError)
 		return
 	}
 
+	// Create the JWT token for the newly registered user
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &Claims{
+		Email: user.Email,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		http.Error(w, "Failed to create token", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"status": "user created"})
+	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }
+
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var credentials struct {
@@ -186,96 +276,26 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authenticate the user
 	user, err := storage.GetUserByEmail(credentials.Email)
-	if err != nil {
+	if err != nil || bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(credentials.Password)) != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// Check the password
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(credentials.Password))
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &Claims{
+		Email: credentials.Email,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		http.Error(w, "Failed to create token", http.StatusInternalServerError)
 		return
 	}
 
-	// Initiate the Ory Cloud OAuth2 authorization flow
-	authURL := "https://exciting-tesla-xohu7lej80.projects.oryapis.com/oauth2/auth"
-	clientID := "c674a060-44f9-404f-9488-46cd12c6b6fb"
-	redirectURI := "http://localhost:8080/callback"
-	scope := "openid offline_access"
-
-	authQuery := url.Values{}
-	authQuery.Set("client_id", clientID)
-	authQuery.Set("redirect_uri", redirectURI)
-	authQuery.Set("scope", scope)
-	authQuery.Set("response_type", "code")
-
-	authURLWithQuery := fmt.Sprintf("%s?%s", authURL, authQuery.Encode())
-
-	// Redirect the user to the Ory Cloud authorization endpoint
-	http.Redirect(w, r, authURLWithQuery, http.StatusTemporaryRedirect)
-
-	// For now just return success message
-	w.Write([]byte("Login successful"))
-}
-
-
-func CallbackHandler(w http.ResponseWriter, r *http.Request) {
-    // Get the authorization code from the query parameters
-    code := r.URL.Query().Get("code")
-    if code == "" {
-        http.Error(w, "Authorization code is missing", http.StatusBadRequest)
-        return
-    }
-
-    // Exchange the authorization code for an access token and refresh token
-    tokenURL := "https://exciting-tesla-xohu7lej80.projects.oryapis.com/oauth2/token"
-    clientID := "c674a060-44f9-404f-9488-46cd12c6b6fb"
-    //clientSecret := "" // Not required since the client authentication method is set to "none"
-    redirectURI := "http://localhost:8080/callback"
-
-    tokenRequest, err := http.NewRequest("POST", tokenURL, nil)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-
-    tokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-    tokenQuery := url.Values{}
-    tokenQuery.Set("grant_type", "authorization_code")
-    tokenQuery.Set("code", code)
-    tokenQuery.Set("client_id", clientID)
-    tokenQuery.Set("redirect_uri", redirectURI)
-
-    tokenRequest.Body = ioutil.NopCloser(strings.NewReader(tokenQuery.Encode()))
-
-    client := &http.Client{}
-    tokenResponse, err := client.Do(tokenRequest)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    defer tokenResponse.Body.Close()
-
-    var tokenData struct {
-        AccessToken  string `json:"access_token"`
-        RefreshToken string `json:"refresh_token"`
-        // Other token data fields
-    }
-
-    err = json.NewDecoder(tokenResponse.Body).Decode(&tokenData)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-
-    // Store the access token and refresh token in the session or cookie
-    // You can also perform additional logic, such as redirecting the user to a protected page
-
-    fmt.Fprintf(w, "Access Token: %s\nRefresh Token: %s", tokenData.AccessToken, tokenData.RefreshToken)
-
-	http.Redirect(w, r, "/", http.StatusFound)
+	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }
