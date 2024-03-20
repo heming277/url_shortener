@@ -159,11 +159,6 @@ func RedirectShortURLHandler(w http.ResponseWriter, r *http.Request) {
 	// Attempt to retrieve the original URL from PostgreSQL first
 	urlMapping, err := storage.GetURLMappingByShortCode(shortCode)
 	if err == nil {
-		// URL found in PostgreSQL, increment the visit count there
-		if err := storage.IncrementURLVisitCount(urlMapping.UserID, shortCode); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 		// Redirect to the original URL
 		http.Redirect(w, r, urlMapping.OriginalURL, http.StatusFound)
 		return
@@ -298,4 +293,70 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
+}
+
+
+func AuthenticatedVisitCountHandler(w http.ResponseWriter, r *http.Request) {
+    // Get the email from the token
+    email, err := getEmailFromToken(r)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusUnauthorized)
+        return
+    }
+
+    // Get the user by email
+    user, err := storage.GetUserByEmail(email)
+    if err != nil {
+        log.Printf("Error retrieving user by email: %v", err)
+        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        return
+    }
+
+    // Get the short code from the URL path
+    vars := mux.Vars(r)
+    shortCode := vars["shortCode"]
+
+    // Increment the visit count in the database
+    err = storage.IncrementURLVisitCount(user.ID, shortCode)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Return a success message
+    w.WriteHeader(http.StatusOK)
+    w.Write([]byte("Visit count incremented successfully"))
+
+}
+
+func GetURLVisitCountHandler(w http.ResponseWriter, r *http.Request) {
+    // Get the email from the token
+    email, err := getEmailFromToken(r)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusUnauthorized)
+        return
+    }
+
+    // Get the user by email
+    user, err := storage.GetUserByEmail(email)
+    if err != nil {
+        log.Printf("Error retrieving user by email: %v", err)
+        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        return
+    }
+
+    // Get the short code from the URL path
+    vars := mux.Vars(r)
+    shortCode := vars["shortCode"]
+
+    // Get the visit count from the database
+    count, err := storage.GetURLVisitCount(user.ID, shortCode)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Return the visit count as JSON
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]int{"visitCount": count})
 }

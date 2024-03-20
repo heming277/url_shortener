@@ -38,7 +38,7 @@ func SaveURLMapping(urlMapping models.URLMapping) error {
 // GetUserURLMappings retrieves all URL mappings for a user from the PostgreSQL database.
 func GetUserURLMappings(userID int) ([]models.URLMapping, error) {
     var urlMappings []models.URLMapping
-    query := `SELECT shortened_url, original_url, visit_count FROM urls WHERE user_id = $1`
+    query := `SELECT user_id, shortened_url, original_url, visit_count FROM urls WHERE user_id = $1`
     rows, err := db.Query(query, userID)
     if err != nil {
         log.Printf("Error executing query: %v", err)
@@ -48,7 +48,7 @@ func GetUserURLMappings(userID int) ([]models.URLMapping, error) {
 
     for rows.Next() {
         var urlMapping models.URLMapping
-        if err := rows.Scan(&urlMapping.ShortCode, &urlMapping.OriginalURL, &urlMapping.VisitCount); err != nil {
+        if err := rows.Scan(&urlMapping.UserID, &urlMapping.ShortCode, &urlMapping.OriginalURL, &urlMapping.VisitCount); err != nil {
             return nil, err
         }
         urlMappings = append(urlMappings, urlMapping)
@@ -87,6 +87,15 @@ func IncrementURLVisitCount(userID int, shortCode string) error {
     _, err := db.Exec(query, userID, shortCode)
     return err
 }
+
+
+func GetURLVisitCount(userID int, shortCode string) (int, error) {
+    var visitCount int
+    query := `SELECT visit_count FROM urls WHERE user_id = $1 AND shortened_url = $2`
+    err := db.QueryRow(query, userID, shortCode).Scan(&visitCount)
+    return visitCount, err
+}
+
 
 
 func DeleteURLMapping(userID int, shortCode string) error {

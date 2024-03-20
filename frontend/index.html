@@ -29,6 +29,22 @@
             border: none;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
+        .table-responsive {
+            max-height: 500px; /* Adjust this value to control the maximum height of the table */
+            overflow-y: auto;
+        }
+        .table td {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 300px; /* Adjust this value to control the maximum width of the table cells */
+        }
+        .no-urls-cell {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            padding: 20px 0;
+        }
     </style>
 </head>
 <body>
@@ -64,18 +80,20 @@
                 </div>
 
                 <div class="row justify-content-center mt-4" id="urlTableContainer" style="display: none;">
-                    <div class="col-md-8">
-                        <h2 class="mb-4">Your Shortened URLs</h2>
-                        <table class="table table-striped" id="urlTable">
-                            <thead>
-                                <tr>
-                                    <th>Original URL</th>
-                                    <th>Shortened URL</th>
-                                    <th>Visit Count</th>
-                                </tr>
-                            </thead>
-                            <tbody id="urlTableBody"></tbody>
-                        </table>
+                    <div class="col">
+                        <h2 class="mb-4 text-center">Your Shortened URLs</h2>
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="urlTable" style="width: 100%;">
+                                <thead>
+                                    <tr>
+                                        <th>Original URL</th>
+                                        <th>Shortened URL</th>
+                                        <th>Visit Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="urlTableBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -141,12 +159,22 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script>
 
+        const userToken = localStorage.getItem('userToken');
+            if (userToken) {
+                handleAuthenticationSuccess(userToken);
+                fetchUserShortenedUrls();
+        }
+
+        var updateIntervalId;
+
+
         document.getElementById('logoutBtn').addEventListener('click', function(event) {
                 localStorage.removeItem('userToken');
                 window.location.reload(); // Or any other logic to revert UI to logged-out state
             });
 
         function handleAuthenticationSuccess(token) {
+
             localStorage.setItem('userToken', token);
             // Hide signup/login buttons and show logout button
             document.getElementById('signupBtn').style.display = 'none';
@@ -171,6 +199,7 @@
             fetchUserShortenedUrls();
         }
 
+ 
         function fetchUserShortenedUrls() {
             const token = localStorage.getItem('userToken');
             if (!token) {
@@ -184,7 +213,6 @@
             // Show the user-specific UI elements
             document.getElementById('urlTableContainer').style.display = 'block';
 
-            // Adjust the endpoint as necessary
             fetch('http://localhost:8080/user/urls', {
                 headers: {
                     'Authorization': 'Bearer ' + token,
@@ -195,16 +223,44 @@
                 const urlTableBody = document.getElementById('urlTableBody');
                 urlTableBody.innerHTML = ''; // Clear the table body before populating it
 
-                if (data && data.urls) {
-                    data.urls.forEach(url => {
+                if (data && Array.isArray(data) && data.length > 0) {
+                    data.forEach(urlMapping => {
                         const row = document.createElement('tr');
                         const originalUrlCell = document.createElement('td');
                         const shortCodeCell = document.createElement('td');
                         const visitCountCell = document.createElement('td');
 
-                        originalUrlCell.textContent = url.originalUrl;
-                        shortCodeCell.textContent = url.shortCode;
-                        visitCountCell.textContent = url.visitCount;
+                        originalUrlCell.textContent = urlMapping.originalUrl;
+                        const shortCodeLink = document.createElement('a');
+                        shortCodeLink.href = `http://localhost:8080/${urlMapping.shortCode}`; // Adjust the base URL as needed
+                        shortCodeLink.target = '_blank'; // Open the link in a new window/tab
+                        shortCodeLink.textContent = urlMapping.shortCode;
+
+                        // Add click event listener to update visit count
+                        shortCodeLink.addEventListener('click', () => {
+                            const userToken = localStorage.getItem('userToken');
+                            fetch(`http://localhost:8080/urls/${urlMapping.shortCode}/visit`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${userToken}`
+                                }
+                            })
+                            .then(response => {
+                                if (response.ok) {
+                                    // Visit count incremented successfully, fetch the updated visit count
+                                    fetchUpdatedVisitCount(userToken, urlMapping.shortCode, visitCountCell);
+                                } else {
+                                    console.error('Error incrementing visit count');
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                            });
+                        });
+
+                        shortCodeCell.appendChild(shortCodeLink);
+                        visitCountCell.textContent = urlMapping.visitCount;
 
                         row.appendChild(originalUrlCell);
                         row.appendChild(shortCodeCell);
@@ -213,14 +269,33 @@
                     });
                 } else {
                     console.log('No URLs found for the user.');
+                    const noUrlsRow = document.createElement('tr');
+                    const noUrlsCell = document.createElement('td');
+                    noUrlsCell.classList.add('no-urls-cell'); // Add a class name
+                    noUrlsCell.colSpan = 3;
+                    noUrlsCell.textContent = 'No shortened URLs found.';
+                    noUrlsRow.appendChild(noUrlsCell);
+                    urlTableBody.appendChild(noUrlsRow);
+                            
                     // Optionally, you can display a message or take any other action for this case
                 }
             })
             .catch(error => console.error('Error fetching URLs:', error));
         }
-
-        // Declare a variable to store the interval ID
-        var updateIntervalId;
+        // Function to fetch the updated visit count
+        function fetchUpdatedVisitCount(token, shortCode, visitCountCell) {
+            fetch(`http://localhost:8080/user/urls/${shortCode}/visitcount`, {
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                visitCountCell.textContent = data.visitCount;
+            })
+            .catch(error => console.error('Error fetching updated visit count:', error));
+        }
+                
 
         // Clear the interval when a new URL is shortened
         function resetUpdateInterval() {
@@ -317,7 +392,9 @@
             fetch('http://localhost:8080/create', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('userToken')}`
+
                 },
                 body: JSON.stringify({ originalUrl: originalUrl })
             })
@@ -357,6 +434,11 @@
 
                     // Show the card
                     resultCard.classList.remove('d-none');
+
+                    var isAuthenticated = !!localStorage.getItem('userToken');
+                    if (isAuthenticated) {
+                        fetchUserShortenedUrls();
+                    }
 
                     // Start updating the visit count periodically
                     updateVisitCountPeriodically(data.shortCode);
@@ -407,6 +489,10 @@
                 getAndDisplayAnalytics(shortCode);
             }, 1500); // Update every 1.5 second
         }
+
+        window.addEventListener('beforeunload', () => {
+            clearInterval(updateIntervalId);
+        });
     </script>
 </body>
 </html>
