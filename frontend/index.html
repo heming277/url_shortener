@@ -45,6 +45,24 @@
             font-size: 1.2rem;
             padding: 20px 0;
         }
+        #errorMessageContainer {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999; /* Ensure this value is higher than the z-index of the modals */
+            animation-duration: 0.5s;
+            animation-fill-mode: forwards;
+        }
+
+        #errorMessageContainer.show {
+            animation-name: fadeIn;
+        }
+
+        #errorMessageContainer.hide {
+            animation-name: fadeOut;
+        }
+            
     </style>
 </head>
 <body>
@@ -100,10 +118,19 @@
         </div>
     </div>
 
+    <div id="errorMessageContainer" class="d-none">
+        <div class="alert alert-danger" role="alert" id="errorMessage"></div>
+    </div>
+    
+
+
     <!-- Signup Modal -->
     <div class="modal fade" id="signupModal" tabindex="-1" role="dialog" aria-labelledby="signupModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
+                <div id="errorMessageContainer" class="d-none">
+                    <div class="alert alert-danger" role="alert" id="errorMessage"></div>
+                </div>
                 <div class="modal-header">
                     <h5 class="modal-title" id="signupModalLabel">Sign Up</h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -131,6 +158,9 @@
     <div class="modal fade" id="loginModal" tabindex="-1" role="dialog" aria-labelledby="loginModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
+                <div id="errorMessageContainer" class="d-none">
+                    <div class="alert alert-danger" role="alert" id="errorMessage"></div>
+                </div>
                 <div class="modal-header">
                     <h5 class="modal-title" id="loginModalLabel">Login</h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -153,6 +183,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal -->
+
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
@@ -334,6 +367,7 @@
             })
             .catch(error => {
                 console.error('Error during signup:', error);
+                showErrorModal('An user already exists with this email');
             });
         });
 
@@ -369,6 +403,7 @@
             })
             .catch(error => {
                 console.error('Error during login:', error);
+                showErrorModal('Invalid Credentials');
             });
         });
 
@@ -493,6 +528,25 @@
         window.addEventListener('beforeunload', () => {
             clearInterval(updateIntervalId);
         });
+
+
+        function showErrorModal(message) {
+            var errorMessageContainer = document.getElementById('errorMessageContainer');
+            var errorMessageElement = document.getElementById('errorMessage');
+
+            errorMessageElement.textContent = message;
+            errorMessageContainer.classList.remove('d-none', 'hide');
+            errorMessageContainer.classList.add('show');
+
+            // Automatically hide the error message after 
+            setTimeout(function() {
+                errorMessageContainer.classList.remove('show');
+                errorMessageContainer.classList.add('hide');
+                setTimeout(function() {
+                    errorMessageContainer.classList.add('d-none');
+                }, 500); // Delay to allow the fade-out animation to complete
+            }, 1000);
+        }
     </script>
 </body>
 </html>
