@@ -1,11 +1,12 @@
 # URL Shortener
 
-URL Shortener is a Go-based web application I designed for creating shortened URLs. It leverages modern web technologies and Go for URL management and URL shortening.
+URL Shortener is a Go-based web application I designed for creating shortened URLs. It uses different backend and frontend tech stacks for URL management and URL shortening.
 
 ## Screenshots
 
-### Homepage
+### Guests
 ![Guest Screenshot](./screenshots/guests.png "Guest Page")
+### Users
 ![Users Screenshot](./screenshots/users.png "Users Page")
 
 ## Features
